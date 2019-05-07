@@ -11,7 +11,7 @@ Description: >-
  2 public subnets, 
  Security group whitelisting Quicksight and user specified Inbound Traffic.
  IGW, S3 EndPoint
- Redshift Clusterc with IAM Role for Spectrum, WLM Queues & Custom Cluster Parameter Group, 
+ Redshift Clusterc with IAM Role for Spectrum, Custom Cluster Parameter Group - different WLM Queues for ETL & BI reporting, 
  Different Cloudwatch alarms based on environment, 
  AWS Glue Catalog, 
  Glue Crawler, 
