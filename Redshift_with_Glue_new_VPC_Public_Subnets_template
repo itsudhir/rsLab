@@ -2,6 +2,8 @@
 # Author: Sudhir Gupta
 # Date: 05-May-2019
 # Version: 1.0
+# These CloudFormation templates are provided as a general guide. You should review and customize them to suit your needs. 
+# Some of the resources deployed by these stacks incur costs as long as they are in use.
 ###########################################################################
 
 AWSTemplateFormatVersion: 2010-09-09
