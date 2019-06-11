@@ -574,11 +574,12 @@ Resources:
             yum update -y aws-cfn-bootstrap
             export REDSHIFT_ENDPOINT=${RedshiftCluster.Endpoint.Address}
             export REDSHIFT_USER=${MasterUsername}
-            export REDSHIFT_PASS=Welcome123
+            export REDSHIFT_PASS=${MasterUserPassword}
             export REDSHIFT_DBNAME=${DatabaseName}
             export REDSHIFT_PORT=${RedshiftClusterPort}
             export REDSHIFT_IAMROLE=${CFNMySpectrumRole.Arn}
             /home/ec2-user/load_tpcds.py create
+            export REDSHIFT_PASS=Welcome123
             /home/ec2-user/load_tpcds.py load
             /opt/aws/bin/cfn-signal --exit-code 0 --resource BastionHost --region ${AWS::Region} --stack ${AWS::StackName}
       KeyName: !Ref KeyPairName
