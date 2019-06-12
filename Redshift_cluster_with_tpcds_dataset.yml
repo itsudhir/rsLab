@@ -1,6 +1,6 @@
 ###########################################################################
 # Author: Sudhir Gupta
-# Date: 3-Jun-2019
+# Date: 2-Jun-2019
 # Version: 2.0
 ###########################################################################
 
@@ -275,9 +275,9 @@ Metadata:
 Mappings:
   AWSAMIRegionMap:
     AMI:
-      AMZNLINUXHVM: ami-0e23311b4cc719a0e
+      AMZNLINUXHVM: ami-02253c06a0267bde1
     us-east-1:
-      AMZNLINUXHVM: ami-0e23311b4cc719a0e
+      AMZNLINUXHVM: ami-02253c06a0267bde1
     us-east-2:
       AMZNLINUXHVM: ami-0f1fb8b0de77e7a31
     us-west-1:
