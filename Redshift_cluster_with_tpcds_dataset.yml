@@ -1,7 +1,7 @@
 ###########################################################################
 # Author: Sudhir Gupta
-# Date: 2-Jun-2019
-# Version: 2.0
+# Date: 11-Jun-2019
+# Version: 2.1
 ###########################################################################
 
 AWSTemplateFormatVersion: 2010-09-09
@@ -279,15 +279,17 @@ Mappings:
     us-east-1:
       AMZNLINUXHVM: ami-02253c06a0267bde1
     us-east-2:
-      AMZNLINUXHVM: ami-0f1fb8b0de77e7a31
+      AMZNLINUXHVM: ami-09c433dd1cc6730c2
     us-west-1:
-      AMZNLINUXHVM: ami-02a398f3c1a7adde7
+      AMZNLINUXHVM: ami-006e80b58ab1a87a3
     us-west-2:
-      AMZNLINUXHVM: ami-04babd89291f34a40
+      AMZNLINUXHVM: ami-059bdc77235da96ea
     ap-south-1:
-      AMZNLINUXHVM: ami-0959c7162a6fb3007
+      AMZNLINUXHVM: ami-0f02001178dfb6830
+    ap-southeast-2:
+      AMZNLINUXHVM: ami-07954aeed47f4b21e
     eu-west-1:
-      AMZNLINUXHVM: ami-04025414f699b80b1
+      AMZNLINUXHVM: ami-04a99438361774acf
   LinuxAMINameMap:
     Amazon-Linux-HVM:
       Code: AMZNLINUXHVM
