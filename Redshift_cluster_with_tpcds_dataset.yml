@@ -107,12 +107,12 @@ Parameters:
       The number of compute nodes in the cluster. For multi-node clusters, the
       NumberOfNodes parameter must be greater than 1
     Type: Number
-    Default: '2'
+    Default: '4'
   
   NodeType:
     Description: The type of node to be provisioned
     Type: String
-    Default: ds2.8xlarge
+    Default: dc2.8xlarge
     AllowedValues:
       - dc2.large
       - dc2.8xlarge
