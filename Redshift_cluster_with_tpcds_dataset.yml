@@ -1,24 +1,23 @@
 ###########################################################################
 # Author: Sudhir Gupta
-# Date: 11-Jun-2019
-# Version: 2.1
+# Date: 13-Jun-2019
+# Version: 3.0
 ###########################################################################
 
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
  This AWS CloudFormation template will create following resources:
- VPC, 
- 2 public subnets, 
- Security group whitelisting Quicksight and user specified Inbound Traffic.
- IGW, S3 EndPoint,
- Bastion host,
- Redshift Cluster with TPCDS 3TB dataset,
- IAM Role for Spectrum, WLM Queues & Custom Cluster Parameter Group,
- Different Cloudwatch alarms based on environment, 
- AWS Glue Catalog, 
- Glue Crawler creates external tables for TPCSDS 30TB dataset.
- Sample Glue Catalog/External tables for Non-Produnction environments,
- Set of Tags 
+ VPC with 2 public subnets, IGW and S3 EndPoint,
+ Security group whitelisting Quicksight and user specified Inbound Traffic,
+ Redshift Cluster with option to enable database logging to S3, option to encrypt database at rest, 
+ and option to restore cluster from snapshot,
+ Custom WLM Queues with custom Cluster Parameter Group like enabling SSL and concurrency scaling,
+ AWS Glue Catalog and IAM Role for Redshift Spectrum, 
+ Different Cloudwatch alarms based on environment,
+ option to load 3TB TPCDS dataset,
+ Bastion / EC2 instance,
+ option to create Redshift spectrum / Athena tables on top of 30TB TPCSDS dataset, and
+ Set of Tags. 
 
 Parameters:
   VPCCIDR:
@@ -72,7 +71,7 @@ Parameters:
       - m5.xlarge
       - t3.small
       - t3.medium
-    Default: m4.large
+    Default: t2.medium
     Description: Amazon EC2 instance type for the bastion instance. t2 instance types are not supported for dedicated VPC tenancy (option below).
     Type: String
 
@@ -153,10 +152,9 @@ Parameters:
     Default: '1'
     
   EncryptionAtRest:
-    Description: >-
-      Do you want to enable data encryption at rest?
+    Description: "Do you want to encrypt database at rest?"
     Type: String
-    Default: false
+    Default: 'false'
     AllowedValues:
       - true
       - false
@@ -181,31 +179,63 @@ Parameters:
     Default: "abc@xyz.com"
     #AllowedPattern: ^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$
     
+  EnableLoggingToS3:
+    Default: 'false'
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Description: "Do you want to enable logging to S3 bucket?"
+        
+  LoadTPCDS3TBDataset:
+    Default: 'true'
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Description: "Do you want to pre-load 3TB TPCDS dataset in Redshift cluster?"
+    
+  ConfigureRedshiftSpectrum:
+    Default: 'true'
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Description: "Do you want to create glue Catalog and IAM role for Redshift spectrum?"
+    
   S3BucketForSpectrum:
     Default: 'jwyant-tpcds'
     Type: String
-    Description: Enter existing S3 Bucket contains data files for Redshift Spectrum
-        
+    Description: "Enter existing S3 Bucket contains dataset. IAM role associated to Redshift cluster will grant GET and LIST access to this bucket."
+      
   GlueCatalogDatabase:
     Default: 'rs_catalog_db'
     Type: String
-    Description: The name of the Glue Catalog database.
-        
+    Description: "Enter name for your Glue Catalog database"
+    
+  CreateSpectrumTables:
+    Default: 'true'
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Description: "Do you want to create external / spectrum tables on top of S3 dataset stored at SpectrumTableLocation?"
+         
   SpectrumTableLocation:
     Default: 's3://jwyant-tpcds/optimized/30tb'
     Type: String
     Description:  >-
-      Enter S3 full path contains data files for the Spectrum table.
+      Enter S3 full path contains data files for the Spectrum table
         
   CrawlerNameSuffix:
     Type: String
     Default: 'tpcds_30tb'
-    Description:  Name of the Glue Crawler to be created for sample S3 bucket for non-Prod Environment
+    Description:  "Name of the Glue Crawler to be created for sample S3 bucket for non-Prod Environment"
         
   GlueTablePrefix:
     Type: String
     Default: 't_'
-    Description: Enter prefix for the table created by Glue crawler
+    Description: "Enter prefix for the table created by Glue crawler"
   
   TagName:
     Type: String
@@ -237,8 +267,8 @@ Metadata:
           - PublicSubnet1
           - PublicSubnet2
           - destCIDRpublic
+          - InstanceType
           - KeyPairName
-          - InstanceType 
       -
         Label:
           default: Redshift Cluster Parameters
@@ -250,27 +280,58 @@ Metadata:
           - DatabaseName
           - MasterUsername
           - MasterUserPassword
-          - InboundTraffic      
+          - InboundTraffic
+          - SubscriptionEmail     
       -
         Label:
           default: Redshift additional/optional Parameters
         Parameters:
+          - EnableLoggingToS3
           - MaxConcurrentCluster
-          - SnapshotIdentifier
-          - SnapshotAccountNumber
-          - SubscriptionEmail
+          - LoadTPCDS3TBDataset
           - EncryptionAtRest
           - kmskey
-          - Maintenancewindow            
+          - SnapshotIdentifier
+          - SnapshotAccountNumber
+          - Maintenancewindow
       -
         Label:
           default: Glue Catalog and Redshift Spectrum configuration Parameters
         Parameters:
+          - ConfigureRedshiftSpectrum
           - S3BucketForSpectrum
+          - CreateSpectrumTables
+          - SpectrumTableLocation
           - GlueCatalogDatabase
           - CrawlerNameSuffix
-          - SpectrumTableLocation
           - GlueTablePrefix
+    ParameterLabels:
+      EnableLoggingToS3:
+        default: Do you want to enable logging to S3 bucket?
+      ConfigureRedshiftSpectrum:
+        default: Do you want to create Glue Catalog and IAM role for Redshift spectrum?
+      CreateSpectrumTables:
+        default: Do you want to create external tables on top of S3 dataset defined against parameter "SpectrumTableLocation"?
+      S3BucketForSpectrum:
+        default: Name of your existing Amazon S3 bucket used for Redshift spectrum
+      MaxConcurrentCluster:
+        default: Max. number of Redshift Concurrency Scaling Clusters
+      EncryptionAtRest:
+        default: Do you want to encrypt database at rest?
+      kmskey:
+        default: KMS key for encrypting database
+      SnapshotIdentifier:
+        default: Redshift Snapshot Identifier - only if you want to restore cluster from snapshot
+      SnapshotAccountNumber:
+        default: AWS Account number where the above snapshot was taken
+      LoadTPCDS3TBDataset:
+        default: Do you want to pre-load 3TB TPCDS dataset in Redshift cluster?
+      KeyPairName:
+        default: Key Pair Name for the EC2 instance
+      InstanceType:
+        default: Instance type for Bastion / Data Loading EC2 machine
+      SubscriptionEmail:
+        default: Email address for CloudWatch alerts / SNS notifications
 
 Mappings:
   AWSAMIRegionMap:
@@ -286,17 +347,84 @@ Mappings:
       AMZNLINUXHVM: ami-059bdc77235da96ea
     ap-south-1:
       AMZNLINUXHVM: ami-0f02001178dfb6830
+    ap-northeast-3:
+      AMZNLINUXHVM: ami-0730bc53da99f6dc0
+    ap-northeast-2:
+      AMZNLINUXHVM: ami-0e0f6619b530e0c94
+    ap-southeast-1:
+      AMZNLINUXHVM: ami-04a9a25558d085c42
     ap-southeast-2:
       AMZNLINUXHVM: ami-07954aeed47f4b21e
+    ap-northeast-1:
+      AMZNLINUXHVM: ami-01264db6d3d2a902d
+    ca-central-1:
+      AMZNLINUXHVM: ami-06ea3c883146de424
     eu-west-1:
       AMZNLINUXHVM: ami-04a99438361774acf
+    eu-central-1:
+      AMZNLINUXHVM: ami-03e87a88e51f373d9
+    eu-west-2:
+      AMZNLINUXHVM: ami-00e6d687a4d774987
+    eu-west-3:
+      AMZNLINUXHVM: ami-06f7377fac4ab04be
+    eu-north-1:
+      AMZNLINUXHVM: ami-00a87bc9ff7dd8b4f
+    sa-east-1:
+      AMZNLINUXHVM: ami-0c7ffe3dd0a3a56e3
   LinuxAMINameMap:
     Amazon-Linux-HVM:
       Code: AMZNLINUXHVM
-
+  RedshiftLoggingAccountIDRegionMap:
+    us-east-1:
+      RSAccountID: 193672423079
+    us-east-2:
+      RSAccountID: 391106570357
+    us-west-1:
+      RSAccountID: 262260360010
+    us-west-2:
+      RSAccountID: 902366379725
+    ap-east-1:
+      RSAccountID: 313564881002
+    ap-south-1:
+      RSAccountID: 865932855811
+    ap-northeast-3:
+      RSAccountID: 090321488786
+    ap-northeast-2:
+      RSAccountID: 760740231472
+    ap-southeast-1:
+      RSAccountID: 361669875840
+    ap-southeast-2:
+      RSAccountID: 762762565011
+    ap-northeast-1:
+      RSAccountID: 404641285394
+    ca-central-1:
+      RSAccountID: 907379612154
+    cn-north-1:
+      RSAccountID: 111890595117
+    cn-northwest-1:
+      RSAccountID: 660998842044
+    eu-west-1:
+      RSAccountID: 210876761215
+    eu-central-1:
+      RSAccountID: 053454850223
+    eu-west-2:
+      RSAccountID: 307160386991
+    eu-west-3:
+      RSAccountID: 915173422425
+    eu-north-1:
+      RSAccountID: 729911121831
+    sa-east-1:
+      RSAccountID: 075028567923
+      
 Conditions:
   IsMultiNodeCluster: !Equals [!Ref ClusterType, 'multi-node']
   IsEncryptionAtRest: !Equals [!Ref EncryptionAtRest, 'true']
+  IsEnableLoggingToS3: !Equals [!Ref EnableLoggingToS3, 'true']
+  IsLoadTPCDS3TBDataset: !Equals [!Ref LoadTPCDS3TBDataset, 'true']
+  IsCreateSpectrumTables: !Equals [!Ref CreateSpectrumTables, 'true']
+  IsConfigureRedshiftSpectrum: !Or
+     - !Equals [!Ref ConfigureRedshiftSpectrum, 'true']
+     - !Condition IsCreateSpectrumTables
   IsSnapshotSpecified:
     Fn::Not:
     - Fn::Equals:
@@ -471,70 +599,9 @@ Resources:
           Protocol: Email
       TopicName: !Join [ "-", [!Ref 'AWS::StackName',"sns"] ]
 
-  CFNMySpectrumRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Join [ "-", [!Ref 'AWS::StackName', "SpectrumRole"] ]
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          -
-            Effect: "Allow"
-            Principal:
-              Service:
-                - "redshift.amazonaws.com"
-                - "glue.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      Path: "/"
-      Policies:
-        -
-          PolicyName: "spectrum-glue-required-access-policy"
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              -
-                Effect: "Allow"
-                Action:
-                    - s3:GetBucketLocation
-                    - s3:GetObject
-                    - s3:ListMultipartUploadParts
-                    - s3:ListBucket
-                    - s3:ListBucketMultipartUploads
-                Resource:
-                    - !Join ['', ["arn:aws:s3:::", !Ref S3BucketForSpectrum]]
-                    - !Join ['', ["arn:aws:s3:::", !Ref S3BucketForSpectrum, "/*"]]
-                    - "arn:aws:s3:::redshift-downloads"
-                    - "arn:aws:s3:::redshift-downloads/TPC-DS/*"
-                    - "arn:aws:s3:::jwyant-tpcds/optimized/30tb/*"
-              -
-                Effect: Allow
-                Action:
-                    - glue:CreateDatabase
-                    - glue:DeleteDatabase
-                    - glue:GetDatabase
-                    - glue:GetDatabases
-                    - glue:UpdateDatabase
-                    - glue:CreateTable
-                    - glue:DeleteTable
-                    - glue:BatchDeleteTable
-                    - glue:UpdateTable
-                    - glue:GetTable
-                    - glue:GetTables
-                    - glue:BatchCreatePartition
-                    - glue:CreatePartition
-                    - glue:DeletePartition
-                    - glue:BatchDeletePartition
-                    - glue:UpdatePartition
-                    - glue:GetPartition
-                    - glue:GetPartitions
-                    - glue:BatchGetPartition
-                    - logs:*
-                Resource:
-                    - "*"
-
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    #Condition: IsLoadTPCDS3TBDataset
     Properties:
       GroupDescription: Enables SSH Access to Bastion Hosts from Corporate IPs
       VpcId: !Ref VPC
@@ -574,14 +641,16 @@ Resources:
             export PATH=$PATH:/usr/local/bin
             yum update -y
             yum update -y aws-cfn-bootstrap
-            export REDSHIFT_ENDPOINT=${RedshiftCluster.Endpoint.Address}
-            export REDSHIFT_USER=${MasterUsername}
-            export REDSHIFT_PASS=${MasterUserPassword}
-            export REDSHIFT_DBNAME=${DatabaseName}
-            export REDSHIFT_PORT=${RedshiftClusterPort}
-            export REDSHIFT_IAMROLE=${CFNMySpectrumRole.Arn}
-            /home/ec2-user/load_tpcds.py create
-            /home/ec2-user/load_tpcds.py load
+            if [ ${LoadTPCDS3TBDataset} = true  ] ; then
+              export REDSHIFT_ENDPOINT=${RedshiftCluster.Endpoint.Address}
+              export REDSHIFT_USER=${MasterUsername}
+              export REDSHIFT_PASS=${MasterUserPassword}
+              export REDSHIFT_DBNAME=${DatabaseName}
+              export REDSHIFT_PORT=${RedshiftClusterPort}
+              export REDSHIFT_IAMROLE=${MyETLRole.Arn}
+              /home/ec2-user/load_tpcds.py create
+              /home/ec2-user/load_tpcds.py load
+            fi
             /opt/aws/bin/cfn-signal --exit-code 0 --resource BastionHost --region ${AWS::Region} --stack ${AWS::StackName}
       KeyName: !Ref KeyPairName
       Tags:
@@ -594,6 +663,45 @@ Resources:
         DeviceIndex: 0
         SubnetId: !Ref VPCPublicSubnet1
                                  
+  RedshiftLoggingS3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Condition: IsEnableLoggingToS3
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+        - Id: RedshiftLogsArchivingToGlacier
+          Status: Enabled
+          ExpirationInDays: '30'
+          Transitions:
+            - TransitionInDays: '14'
+              StorageClass: Glacier
+      Tags:
+        -
+          Key: Name
+          Value: !Join [ "-", [ !Ref TagName, !Ref 'AWS::StackName', "Redshift-Cluster-LoggingBucket" ] ]
+        -
+          Key: Environment
+          Value: !Ref TagEnvironment
+            
+  RedshiftLoggingS3BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Condition: IsEnableLoggingToS3
+    Properties:
+      Bucket: !Ref RedshiftLoggingS3Bucket
+      PolicyDocument: 
+        Statement:
+        - Principal:
+            AWS: !Join [ '', ['arn:aws:iam::', !FindInMap [RedshiftLoggingAccountIDRegionMap, !Ref 'AWS::Region', RSAccountID ] ,':user/logs']]
+          Effect: Allow
+          Action: 's3:GetBucketAcl'
+          Resource: !Sub '${RedshiftLoggingS3Bucket.Arn}'
+        - Principal:
+            AWS: !Join [ '', ['arn:aws:iam::', !FindInMap [RedshiftLoggingAccountIDRegionMap, !Ref 'AWS::Region', RSAccountID ] ,':user/logs']]
+          Effect: Allow
+          Action: 's3:PutObject'
+          Resource: !Sub '${RedshiftLoggingS3Bucket.Arn}/AWSLogs/*'
+            
   RedshiftClusterParameterGroup:
     Type: 'AWS::Redshift::ClusterParameterGroup'
     Properties:
@@ -633,9 +741,9 @@ Resources:
 
   RedshiftCluster:
     Type: 'AWS::Redshift::Cluster'
-    DependsOn: CFNMySpectrumRole
     Properties:
       ClusterType: !Ref ClusterType
+      ClusterIdentifier: !Join ["-", [!Ref 'AWS::StackName', !Ref DatabaseName]]
       NumberOfNodes: !If 
         - IsMultiNodeCluster
         - !Ref NumberOfNodes
@@ -664,10 +772,20 @@ Resources:
       PreferredMaintenanceWindow: !Ref Maintenancewindow
       PubliclyAccessible: 'true'
       ClusterSubnetGroupName: !Ref RedshiftClusterSubnetGroup
-      IamRoles:
-        - 'Fn::GetAtt':
-            - CFNMySpectrumRole
-            - Arn
+      LoggingProperties: !If 
+          - IsEnableLoggingToS3
+          - BucketName: !Ref RedshiftLoggingS3Bucket
+            S3KeyPrefix: 'AWSLogs'
+          - !Ref 'AWS::NoValue'
+      IamRoles: 
+          - !If 
+              - IsConfigureRedshiftSpectrum
+              - !GetAtt CFNMySpectrumRole.Arn
+              - !Ref 'AWS::NoValue'
+          - !If 
+              - IsLoadTPCDS3TBDataset
+              - !GetAtt MyETLRole.Arn
+              - !Ref 'AWS::NoValue'
       Tags:
         -
           Key: Name
@@ -701,8 +819,103 @@ Resources:
       ComparisonOperator: GreaterThanThreshold
       Unit: Percent
 
+  MyETLRole:
+    Type: 'AWS::IAM::Role'
+    #Condition: IsLoadTPCDS3TBDataset
+    Properties:
+      RoleName: !Join [ "-", [!Ref 'AWS::StackName', "etl-role"] ]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "redshift.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "tpcds-etl-required-access-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                    - s3:GetBucketLocation
+                    - s3:GetObject
+                    - s3:ListMultipartUploadParts
+                    - s3:ListBucket
+                    - s3:ListBucketMultipartUploads
+                Resource:
+                    - "arn:aws:s3:::redshift-downloads"
+                    - "arn:aws:s3:::redshift-downloads/TPC-DS/*"
+
+  CFNMySpectrumRole:
+    Type: 'AWS::IAM::Role'
+    Condition: IsConfigureRedshiftSpectrum
+    Properties:
+      RoleName: !Join [ "-", [!Ref 'AWS::StackName', "SpectrumRole"] ]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "redshift.amazonaws.com"
+                - "glue.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: "spectrum-glue-required-access-policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                    - s3:GetBucketLocation
+                    - s3:GetObject
+                    - s3:ListMultipartUploadParts
+                    - s3:ListBucket
+                    - s3:ListBucketMultipartUploads
+                Resource:
+                    - !Join ['', ["arn:aws:s3:::", !Ref S3BucketForSpectrum]]
+                    - !Join ['', ["arn:aws:s3:::", !Ref S3BucketForSpectrum, "/*"]]
+                    - "arn:aws:s3:::jwyant-tpcds/optimized/30tb/*"
+              -
+                Effect: Allow
+                Action:
+                    - glue:CreateDatabase
+                    - glue:DeleteDatabase
+                    - glue:GetDatabase
+                    - glue:GetDatabases
+                    - glue:UpdateDatabase
+                    - glue:CreateTable
+                    - glue:DeleteTable
+                    - glue:BatchDeleteTable
+                    - glue:UpdateTable
+                    - glue:GetTable
+                    - glue:GetTables
+                    - glue:BatchCreatePartition
+                    - glue:CreatePartition
+                    - glue:DeletePartition
+                    - glue:BatchDeletePartition
+                    - glue:UpdatePartition
+                    - glue:GetPartition
+                    - glue:GetPartitions
+                    - glue:BatchGetPartition
+                    - logs:*
+                Resource:
+                    - "*"
+                    
   GlueCatalogDB:
-    DependsOn: CFNMySpectrumRole
+    Condition: IsConfigureRedshiftSpectrum
     Type: 'AWS::Glue::Database'
     Properties:
       CatalogId: !Ref AWS::AccountId
@@ -711,11 +924,13 @@ Resources:
           Description: AWS Glue Catalog database for demo
 
   GlueCrawler:
-    Type: AWS::Glue::Crawler
+    Condition: GlueCatalogDB
+    Type: 'AWS::Glue::Crawler'
+    Condition: IsCreateSpectrumTables
     Properties:
       Name: !Join [ "-", [!Ref 'AWS::StackName', !Ref CrawlerNameSuffix] ]
       Role: !GetAtt CFNMySpectrumRole.Arn
-      Description: AWS Glue crawler to crawl flights data
+      Description: AAWS Glue crawler to crawl tpcds data
       DatabaseName: !Ref GlueCatalogDatabase
       Targets:
         S3Targets:
@@ -747,11 +962,15 @@ Outputs:
     Value: !Ref VPCPublicSubnet2
     Export:  
         Name: !Sub "${AWS::StackName}-VPCPublicSubnet2"
-        
-  ClusterEndpoint:
+  
+  BastionHost:
+    Description: DNS Name of Bastion host.
+    Value: !GetAtt BastionHost.PublicDnsName
+  
+  RedshiftClusterEndpoint:
     Description: Redshift Cluster endpoint
-    Value: !Sub "${RedshiftCluster.Endpoint.Address}:${RedshiftCluster.Endpoint.Port}"
-          
+    Value: !Sub "${RedshiftCluster.Endpoint.Address}:${RedshiftCluster.Endpoint.Port}"     
+         
   RedshiftClusterName:
     Description: Name of the Redshift Cluster
     Value: !Ref RedshiftCluster
@@ -766,19 +985,30 @@ Outputs:
     
   RedshiftDatabaseName:
     Description: Name of the Redshift Database
-    Value: !Ref DatabaseName
+    Value: !If 
+              - IsSnapshotSpecified
+              - !Join [ ' ',['Check name of database from which the Snapshot', !Ref SnapshotIdentifier , ' was originally taken.']]
+              - !Ref DatabaseName
     
   RedshiftUsername:
     Value: !Ref MasterUsername
     
+  RedshiftLoggingS3Bucket:
+    Description: Name of S3 bucket created for Redshift Logging
+    Condition: IsEnableLoggingToS3
+    Value: !Ref RedshiftLoggingS3Bucket
+      
   RedshiftClusterIAMRole:
     Description: IAM Role assigned to Redshift cluster & Glue Catalog
+    Condition: IsConfigureRedshiftSpectrum
     Value: !GetAtt CFNMySpectrumRole.Arn
 
   GlueCatalogDBName:
     Description: Name of the AWS Glue Catalog Database
+    Condition: IsConfigureRedshiftSpectrum
     Value: !Ref GlueCatalogDB
 
   GlueCrawlerName:
     Description: Name of the AWS Glue Crawler
+    Condition: IsCreateSpectrumTables
     Value: !Ref GlueCrawler
